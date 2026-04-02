@@ -1,0 +1,26 @@
+
+$customVar = require customVar             # --customVar must be provided by user (a literal string)
+$id = letter digit* 
+$name = letter digit 1-5
+$a = ()
+
+pattern:
+
+capture phone (
+  digit 1-5
+)
+capture smth () 
+
+or (
+  (whitespace 1-5)
+  (whitespace 3)+
+) 1
+
+$customVar 
+@email 
+whitespace* 
+#['asd ' digit]
+[a . s d digit space]
+
+"\t'abc"+
+
