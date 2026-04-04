@@ -1,26 +1,31 @@
-
-$customVar = require customVar             # --customVar must be provided by user (a literal string)
+$customVar = require v              # --customVar must be provided by user (a literal string)
 $id = letter digit* 
-$name = letter digit 1-5
-$a = ()
+$name = not letter digit 1-5
+$a = $customVar
 
 pattern:
 
+$name
 capture phone (
-  digit 1-5
+  digit 1-5 
+  letter 3-3
+  $id
 )
-capture smth () 
+capture smth ($a)
 
-or (
-  (whitespace 1-5)
-  (whitespace 3)+
-) 1
+(
+  whitespace 1-5 |
+  whitespace 3- |
+  a b
+) 
 
 $customVar 
+[a-h 4-5 4-9 a-z]
+not [a . s d 1-9 digit space \]  \[ [ ] 123 
+@phone
 @email 
 whitespace* 
 #['asd ' digit]
-[a . s d digit space]
 
 "\t'abc"+
 

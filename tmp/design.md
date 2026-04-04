@@ -74,10 +74,8 @@ lx
     find
     findall
     test
-        <pattern> <content>
-    replace <pattern> "replacement" <content>
-
-
+        <pattern> <content> [--name=value ...]
+    replace <pattern> "replacement" <content> [--name=value ...]
 
 
 

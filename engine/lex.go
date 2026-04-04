@@ -7,33 +7,31 @@ import (
 type tokenType int
 
 const (
-	ident tokenType = iota
-	variable
-	builtin
-	literal
-	class
-	number
+	identToken tokenType = iota
+	notToken
+	captureToken
+	requireToken
+	variableToken
+	builtinToken
+	literalToken
+	classToken
+	numberToken
 
-	lparen
-	rparen
-	lbracket
-	rbracket
+	lparenToken
+	rparenToken
+	lbracketToken
+	rbracketToken
 
-	star
-	plus
-	qmark
-	dash
-	equals
-	colon
+	starToken
+	plusToken
+	qmarkToken
+	pipeToken
+	dashToken
+	equalsToken
+	colonToken
 
-	eof
+	eofToken
 )
-
-type position struct {
-	line   int
-	column int
-	offset int
-}
 
 type token struct {
 	typ tokenType
@@ -133,7 +131,7 @@ func (l *lexer) lex() ([]token, *lxError) {
 			}
 
 			tokens = append(tokens, token{
-				typ: number,
+				typ: numberToken,
 				val: val,
 				pos: start,
 			})
@@ -158,10 +156,18 @@ func (l *lexer) lex() ([]token, *lxError) {
 			}
 
 			tokens = append(tokens, token{
-				typ: ident,
+				typ: identToken,
 				val: val,
 				pos: start,
 			})
+			switch val {
+			case "not":
+				tokens[len(tokens)-1].typ = notToken
+			case "capture":
+				tokens[len(tokens)-1].typ = captureToken
+			case "require":
+				tokens[len(tokens)-1].typ = requireToken
+			}
 			continue
 		}
 
@@ -184,7 +190,7 @@ func (l *lexer) lex() ([]token, *lxError) {
 			}
 
 			tokens = append(tokens, token{
-				typ: variable,
+				typ: variableToken,
 				val: val,
 				pos: start,
 			})
@@ -211,7 +217,7 @@ func (l *lexer) lex() ([]token, *lxError) {
 			}
 
 			tokens = append(tokens, token{
-				typ: builtin,
+				typ: builtinToken,
 				val: val,
 				pos: start,
 			})
@@ -272,12 +278,14 @@ func (l *lexer) lex() ([]token, *lxError) {
 			}
 
 			tokens = append(tokens, token{
-				typ: literal,
+				typ: literalToken,
 				val: string(val),
 				pos: start,
 			})
 			continue
 		}
+
+		// class
 		if ch == '[' {
 			l.advance()
 			start := l.makePos()
@@ -327,7 +335,7 @@ func (l *lexer) lex() ([]token, *lxError) {
 			}
 
 			tokens = append(tokens, token{
-				typ: class,
+				typ: classToken,
 				val: string(val),
 				pos: start,
 			})
@@ -339,25 +347,27 @@ func (l *lexer) lex() ([]token, *lxError) {
 
 		switch ch {
 		case '(':
-			tokens = append(tokens, token{typ: lparen, pos: start})
+			tokens = append(tokens, token{typ: lparenToken, pos: start})
 		case ')':
-			tokens = append(tokens, token{typ: rparen, pos: start})
+			tokens = append(tokens, token{typ: rparenToken, pos: start})
 		case '[':
-			tokens = append(tokens, token{typ: lbracket, pos: start})
+			tokens = append(tokens, token{typ: lbracketToken, pos: start})
 		case ']':
-			tokens = append(tokens, token{typ: rbracket, pos: start})
+			tokens = append(tokens, token{typ: rbracketToken, pos: start})
 		case '*':
-			tokens = append(tokens, token{typ: star, pos: start})
+			tokens = append(tokens, token{typ: starToken, pos: start})
 		case '+':
-			tokens = append(tokens, token{typ: plus, pos: start})
+			tokens = append(tokens, token{typ: plusToken, pos: start})
 		case '?':
-			tokens = append(tokens, token{typ: qmark, pos: start})
+			tokens = append(tokens, token{typ: qmarkToken, pos: start})
+		case '|':
+			tokens = append(tokens, token{typ: pipeToken, pos: start})
 		case '-':
-			tokens = append(tokens, token{typ: dash, pos: start})
+			tokens = append(tokens, token{typ: dashToken, pos: start})
 		case '=':
-			tokens = append(tokens, token{typ: equals, pos: start})
+			tokens = append(tokens, token{typ: equalsToken, pos: start})
 		case ':':
-			tokens = append(tokens, token{typ: colon, pos: start})
+			tokens = append(tokens, token{typ: colonToken, pos: start})
 		default:
 			err := &lxError{
 				msg: "unexpected character: " + string(ch),
@@ -370,7 +380,7 @@ func (l *lexer) lex() ([]token, *lxError) {
 	}
 
 	tokens = append(tokens, token{
-		typ: eof,
+		typ: eofToken,
 		pos: l.makePos(),
 	})
 

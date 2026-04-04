@@ -2,12 +2,41 @@ package engine
 
 import (
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 )
 
-var builtins = map[string]struct{}{
-	"email": {},
-	"phone": {},
+var identCharRegex = regexp.MustCompile("[a-zA-Z0-9_]")
+var identRegex = regexp.MustCompile("^[a-zA-Z_][a-zA-Z0-9_]*$")
+var numberCharRegex = regexp.MustCompile("[0-9]")
+var numberRegex = regexp.MustCompile("^[1-9][0-9]*$")
+var whitespaceCharRegex = regexp.MustCompile(`\s`)
+var upperCharRegex = regexp.MustCompile(`[A-Z]`)
+var lowerCharRegex = regexp.MustCompile(`[a-z]`)
+
+var builtins = map[string]string{ // strings pulled from builtins/
+	"email": `capture email ( "EMAIL" )`,
+	"phone": ``,
+}
+
+var idents = map[string]struct{}{
+	"linestart":  {},
+	"lineend":    {},
+	"whitespace": {},
+	"tab":        {},
+	"space":      {},
+	"newline":    {},
+	"digit":      {},
+	"anychar":    {},
+	"upper":      {},
+	"lower":      {},
+}
+
+type position struct {
+	line   int
+	column int
+	offset int
 }
 
 type lxError struct {
@@ -26,10 +55,10 @@ func printError(src string, err lxError) {
 	line := lines[err.pos.line-1]
 
 	fmt.Printf("Error: %s\n", err.msg)
-	fmt.Printf(" %d:%d | %s\n", err.pos.line, err.pos.column, line)
+	fmt.Printf(" %d | %s\n", err.pos.line, line)
 
 	// caret line
-	fmt.Print("     | ")
+	fmt.Print("   | ")
 
 	for i := 1; i < err.pos.column; i++ {
 		if i-1 < len(line) && line[i-1] == '\t' {
@@ -47,17 +76,26 @@ func Run(mode, pattern, content, replacement string, vars map[string]string) str
 	tokens, err := lexer.lex()
 	if err != nil {
 		printError(pattern, *err)
+		os.Exit(1)
 	} else {
-		//printTokens(tokens)
+		// printTokens(tokens)
 	}
 
 	parser := newParser(tokens)
 	ast, err := parser.parse()
 	if err != nil {
 		printError(pattern, *err)
-	} else {
-		ast.print()
+		os.Exit(1)
 	}
+
+	resolver := newResolver(ast, vars)
+	resolvedAst, err := resolver.resolve()
+	if err != nil {
+		printError(pattern, *err)
+		os.Exit(1)
+	}
+
+	resolvedAst.print()
 
 	// nfa := Compile(ast)
 	return ""
