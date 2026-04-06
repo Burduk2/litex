@@ -1,11 +1,29 @@
 package engine
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"strings"
 )
+
+type RunnerMode int
+
+const (
+	CompileMode RunnerMode = iota
+	FindMode
+	FindAllMode
+	TestMode
+	ReplaceMode
+	ReplaceAllMode
+)
+
+type RunnerOptions struct {
+	Mode        RunnerMode
+	Pattern     string
+	Content     string
+	Replacement string
+	Vars        map[string]string
+}
 
 var identCharRegex = regexp.MustCompile("[a-zA-Z0-9_]")
 var identRegex = regexp.MustCompile("^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -15,22 +33,21 @@ var whitespaceCharRegex = regexp.MustCompile(`\s`)
 var upperCharRegex = regexp.MustCompile(`[A-Z]`)
 var lowerCharRegex = regexp.MustCompile(`[a-z]`)
 
-var builtins = map[string]string{ // strings pulled from builtins/
-	"email": `capture email ( "EMAIL" )`,
-	"phone": ``,
-}
-
-var idents = map[string]struct{}{
-	"linestart":  {},
-	"lineend":    {},
+var runeIdents = map[string]struct{}{
+	"digit":      {},
+	"letter":     {},
 	"whitespace": {},
 	"tab":        {},
 	"space":      {},
 	"newline":    {},
-	"digit":      {},
-	"anychar":    {},
 	"upper":      {},
 	"lower":      {},
+}
+
+var wildcardIdents = map[string]struct{}{
+	"linestart": {},
+	"lineend":   {},
+	"anychar":   {},
 }
 
 type position struct {
@@ -39,47 +56,19 @@ type position struct {
 	offset int
 }
 
-type lxError struct {
-	msg string
-	pos position
-}
+func Run(options RunnerOptions) string {
+	pattern := options.Pattern
+	vars := options.Vars
+	mode := options.Mode
+	content := options.Content
 
-func printError(src string, err lxError) {
-	lines := strings.Split(src, "\n")
-
-	if err.pos.line <= 0 || err.pos.line > len(lines) {
-		fmt.Println("Error:", err.msg)
-		return
-	}
-
-	line := lines[err.pos.line-1]
-
-	fmt.Printf("Error: %s\n", err.msg)
-	fmt.Printf(" %d | %s\n", err.pos.line, line)
-
-	// caret line
-	fmt.Print("   | ")
-
-	for i := 1; i < err.pos.column; i++ {
-		if i-1 < len(line) && line[i-1] == '\t' {
-			fmt.Print("    ")
-		} else {
-			fmt.Print(" ")
-		}
-	}
-
-	fmt.Println(" ^")
-}
-
-func Run(mode, pattern, content, replacement string, vars map[string]string) string {
 	lexer := newLexer(pattern)
 	tokens, err := lexer.lex()
 	if err != nil {
 		printError(pattern, *err)
 		os.Exit(1)
-	} else {
-		// printTokens(tokens)
 	}
+	// printTokens(tokens)
 
 	parser := newParser(tokens)
 	ast, err := parser.parse()
@@ -87,6 +76,7 @@ func Run(mode, pattern, content, replacement string, vars map[string]string) str
 		printError(pattern, *err)
 		os.Exit(1)
 	}
+	// ast.print()
 
 	resolver := newResolver(ast, vars)
 	resolvedAst, err := resolver.resolve()
@@ -94,19 +84,39 @@ func Run(mode, pattern, content, replacement string, vars map[string]string) str
 		printError(pattern, *err)
 		os.Exit(1)
 	}
+	// resolvedAst.print()
 
-	resolvedAst.print()
+	compiled, err := Compile(resolvedAst)
+	if err != nil {
+		printError(pattern, *err)
+		os.Exit(1)
+	}
 
-	// nfa := Compile(ast)
-	return ""
-	/*
-		switch mode {
-		case "find":
-			return Find(nfa, content)
-		case "findall":
-			return FindAll(nfa, content)
-		case "test":
-			return Test(nfa, content)
+	switch mode {
+	case CompileMode:
+		return compiled.pattern
+	case FindMode:
+		return compiled.regex.FindString(content)
+	case FindAllMode:
+		return strings.Join(compiled.regex.FindAllString(content, -1), "\n")
+	case ReplaceMode:
+		return replaceFirst(compiled.regex, content, options.Replacement)
+	case ReplaceAllMode:
+		return compiled.regex.ReplaceAllString(content, options.Replacement)
+	case TestMode:
+		if compiled.regex.MatchString(content) {
+			return "true"
 		}
-	*/
+		return "false"
+	default:
+		return ""
+	}
+}
+
+func replaceFirst(re *regexp.Regexp, content, replacement string) string {
+	loc := re.FindStringIndex(content)
+	if loc == nil {
+		return content
+	}
+	return content[:loc[0]] + replacement + content[loc[1]:]
 }

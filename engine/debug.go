@@ -6,6 +6,41 @@ import (
 	"strings"
 )
 
+type lxError struct {
+	msg string
+	pos position
+}
+
+func printError(src string, err lxError) {
+	lines := strings.Split(src, "\n")
+
+	if err.pos.line <= 0 || err.pos.line > len(lines) {
+		fmt.Println("Error:", err.msg)
+		return
+	}
+
+	line := lines[err.pos.line-1]
+	lineNum := fmt.Sprintf("%d", err.pos.line)
+	fmt.Printf("Litex Compile Error: %s\n", err.msg)
+	fmt.Printf(" %s | %s\n", lineNum, line)
+
+	// caret line
+	for i := 0; i < len(lineNum); i++ {
+		fmt.Print(" ")
+	}
+	fmt.Print("  | ")
+
+	for i := 1; i < err.pos.column; i++ {
+		if i-1 < len(line) && line[i-1] == '\t' {
+			fmt.Print("    ")
+		} else {
+			fmt.Print(" ")
+		}
+	}
+
+	fmt.Println("^")
+}
+
 // --------------- PARSE
 func (p program) print() {
 	var parts []string
@@ -47,9 +82,9 @@ func exprString(e expr) string {
 		for _, item := range v.items {
 			switch itemType := item.(type) {
 			case classChar:
-				content = append(content, fmt.Sprintf("char(%s)", string(itemType.value)))
+				content = append(content, fmt.Sprintf("'%s'", string(itemType.value)))
 			case classRange:
-				content = append(content, fmt.Sprintf("range(%s-%s)", string(itemType.from), string(itemType.to)))
+				content = append(content, fmt.Sprintf("%s-%s", string(itemType.from), string(itemType.to)))
 			default:
 				content = append(content, exprString(item))
 			}
@@ -105,16 +140,10 @@ func (t tokenType) String() string {
 		return "lbracket"
 	case rbracketToken:
 		return "rbracket"
-	case starToken:
-		return "star"
-	case plusToken:
-		return "plus"
-	case qmarkToken:
-		return "qmark"
 	case pipeToken:
 		return "pipe"
-	case dashToken:
-		return "dash"
+	case rangeSepToken:
+		return "rangeSep"
 	case equalsToken:
 		return "equals"
 	case colonToken:

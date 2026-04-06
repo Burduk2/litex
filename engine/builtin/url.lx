@@ -1,0 +1,12 @@
+pattern:
+
+capture URL(
+  letter
+  [letter digit + - .] 0..
+  "://"
+  @domain_unwrapped
+  ( ":" digit 1.. ) 0..1
+  ( "/" [letter digit _ % / - . ~] 0.. ) 0..1
+  ( "?" [letter digit _ = & % + - . ~] 0.. ) 0..1
+  ( "#" [letter digit _ % - . ~ / ? : @ ! $ & ' ( ) + , ; =] 0.. ) 0..1
+)

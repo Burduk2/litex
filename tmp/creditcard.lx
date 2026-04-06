@@ -1,0 +1,7 @@
+pattern:
+capture CreditCard(
+  (
+    digit 4
+    ( whitespace | "-" ) 0..1
+  ) 4
+) 

@@ -3,24 +3,28 @@ package engine
 import "fmt"
 
 type resolver struct {
-	ast program
-
-	cliVars map[string]string
-
-	definitions  map[string]expr
-	resolving    map[string]struct{}
-	resolvedVars map[string]expr
-	usedBuiltins map[string]struct{}
+	ast             program
+	cliVars         map[string]string
+	definitions     map[string]expr
+	definitionOrder []defineExpr
+	resolving       map[string]struct{}
+	resolvedVars    map[string]expr
+	usedVars        map[string]struct{}
+	usedCaptures    map[string]struct{}
+	usedBuiltins    map[string]struct{}
 }
 
 func newResolver(ast program, cliVars map[string]string) *resolver {
 	return &resolver{
-		ast:          ast,
-		cliVars:      cliVars,
-		definitions:  make(map[string]expr),
-		resolving:    make(map[string]struct{}),
-		resolvedVars: make(map[string]expr),
-		usedBuiltins: make(map[string]struct{}),
+		ast:             ast,
+		cliVars:         cliVars,
+		definitions:     make(map[string]expr),
+		definitionOrder: nil,
+		resolving:       make(map[string]struct{}),
+		resolvedVars:    make(map[string]expr),
+		usedVars:        make(map[string]struct{}),
+		usedCaptures:    make(map[string]struct{}),
+		usedBuiltins:    make(map[string]struct{}),
 	}
 }
 
@@ -33,14 +37,19 @@ func (resolver *resolver) resolve() (program, *lxError) {
 		switch current := expression.(type) {
 		case defineExpr:
 			if seenPatternSection {
-				return program{}, &lxError{msg: "definitions are not allowed after 'pattern:': $" + current.name}
+				return program{}, &lxError{
+					msg: "definitions are not allowed after 'pattern:': $" + current.name,
+					pos: current.pos,
+				}
 			}
 			if _, exists := resolver.definitions[current.name]; exists {
 				return program{}, &lxError{
 					msg: "duplicate variable definition: $" + current.name,
+					pos: current.pos,
 				}
 			}
 			resolver.definitions[current.name] = current.value
+			resolver.definitionOrder = append(resolver.definitionOrder, current)
 		case patternSectionExpr:
 			seenPatternSection = true
 		default:
@@ -48,7 +57,17 @@ func (resolver *resolver) resolve() (program, *lxError) {
 			if err != nil {
 				return program{}, err
 			}
-			expressions = append(expressions, resolvedExpr)
+			expressions = appendNormalizedResolvedExpr(expressions, resolvedExpr)
+		}
+	}
+
+	for _, definition := range resolver.definitionOrder {
+		if _, ok := resolver.usedVars[definition.name]; ok {
+			continue
+		}
+		return program{}, &lxError{
+			msg: "unused variable: $" + definition.name,
+			pos: definition.pos,
 		}
 	}
 
@@ -58,9 +77,9 @@ func (resolver *resolver) resolve() (program, *lxError) {
 func (resolver *resolver) resolveExpr(expression expr) (expr, *lxError) {
 	switch current := expression.(type) {
 	case identExpr:
-		return current, nil
+		return resolver.resolveIdent(current)
 	case variableExpr:
-		return resolver.resolveVar(current.name)
+		return resolver.resolveVar(current)
 	case requiredVarExpr:
 		return resolver.resolveRequiredVar(current)
 	case notExpr:
@@ -68,10 +87,13 @@ func (resolver *resolver) resolveExpr(expression expr) (expr, *lxError) {
 		if err != nil {
 			return nil, err
 		}
-		return notExpr{target: target}, nil
+		return notExpr{pos: current.pos, target: target}, nil
 	case builtinExpr:
 		if _, ok := resolver.usedBuiltins[current.name]; ok {
-			return nil, &lxError{msg: "cannot use a builtin multiple times: @" + current.name}
+			return nil, &lxError{
+				msg: "cannot use a builtin multiple times: @" + current.name,
+				pos: current.pos,
+			}
 		}
 		resolver.usedBuiltins[current.name] = struct{}{}
 		return current, nil
@@ -80,25 +102,73 @@ func (resolver *resolver) resolveExpr(expression expr) (expr, *lxError) {
 	case classExpr:
 		return current, nil
 	case groupExpr:
-		return resolver.resolveGroup(current)
+		group, err := resolver.resolveGroup(current)
+		if err != nil {
+			return nil, err
+		}
+		return unwrapRedundantResolvedGroup(group), nil
 	case captureExpr:
+		if _, ok := resolver.usedCaptures[current.name]; ok {
+			return nil, &lxError{
+				msg: "duplicate capture name: " + current.name,
+				pos: current.pos,
+			}
+		}
+		resolver.usedCaptures[current.name] = struct{}{}
+
 		group, err := resolver.resolveGroup(current.group)
 		if err != nil {
 			return nil, err
 		}
-		return captureExpr{name: current.name, group: group}, nil
+		if isResolvedEmptyExpr(group) {
+			return nil, &lxError{
+				msg: "capture group cannot be an empty string literal",
+				pos: current.pos,
+			}
+		}
+		return captureExpr{pos: current.pos, name: current.name, group: group}, nil
 	case quantifierExpr:
 		target, err := resolver.resolveExpr(current.target)
 		if err != nil {
 			return nil, err
 		}
-		return quantifierExpr{target: target, min: current.min, max: current.max}, nil
+		if isResolvedEmptyExpr(target) {
+			return nil, &lxError{
+				msg: "empty string literals cannot be quantified",
+				pos: current.pos,
+			}
+		}
+		return quantifierExpr{pos: current.pos, target: target, min: current.min, max: current.max}, nil
 	case defineExpr:
-		return nil, &lxError{msg: fmt.Sprintf("unexpected definition of $%s during resolution", current.name)}
+		return nil, &lxError{
+			msg: fmt.Sprintf("unexpected definition of $%s during resolution", current.name),
+			pos: current.pos,
+		}
 	case patternSectionExpr:
-		return nil, &lxError{msg: "unexpected pattern section during resolution"}
+		return nil, &lxError{
+			msg: "unexpected pattern section during resolution",
+			pos: current.pos,
+		}
 	default:
-		return nil, &lxError{msg: "unknown expression during resolution"}
+		return nil, &lxError{
+			msg: "unknown expression during resolution",
+			pos: expression.exprPos(),
+		}
+	}
+}
+
+func (resolver *resolver) resolveIdent(ident identExpr) (expr, *lxError) {
+	if _, ok := runeIdents[ident.name]; ok {
+		return ident, nil
+	}
+
+	if _, ok := wildcardIdents[ident.name]; ok {
+		return ident, nil
+	}
+
+	return nil, &lxError{
+		msg: "unknown identifier: " + ident.name,
+		pos: ident.pos,
 	}
 }
 
@@ -112,48 +182,99 @@ func (resolver *resolver) resolveGroup(group groupExpr) (groupExpr, *lxError) {
 			if err != nil {
 				return groupExpr{}, err
 			}
-			resolvedBranch = append(resolvedBranch, resolvedExpr)
+			resolvedBranch = appendNormalizedResolvedExpr(resolvedBranch, resolvedExpr)
 		}
 		branches = append(branches, resolvedBranch)
 	}
 
-	return groupExpr{branches: branches}, nil
+	return groupExpr{pos: group.pos, branches: branches}, nil
 }
 
-func (resolver *resolver) resolveVar(name string) (expr, *lxError) {
-	if resolved, ok := resolver.resolvedVars[name]; ok {
+func (resolver *resolver) resolveVar(variable variableExpr) (expr, *lxError) {
+	resolver.usedVars[variable.name] = struct{}{}
+
+	if resolved, ok := resolver.resolvedVars[variable.name]; ok {
 		return resolved, nil
 	}
 
-	if _, ok := resolver.resolving[name]; ok {
+	if _, ok := resolver.resolving[variable.name]; ok {
 		return nil, &lxError{
-			msg: "cyclic variable definition: $" + name,
+			msg: "cyclic variable definition: $" + variable.name,
+			pos: variable.pos,
 		}
 	}
 
-	definition, ok := resolver.definitions[name]
+	definition, ok := resolver.definitions[variable.name]
 	if !ok {
 		return nil, &lxError{
-			msg: "undefined variable: $" + name,
+			msg: "undefined variable: $" + variable.name,
+			pos: variable.pos,
 		}
 	}
 
-	resolver.resolving[name] = struct{}{}
+	resolver.resolving[variable.name] = struct{}{}
 	resolved, err := resolver.resolveExpr(definition)
-	delete(resolver.resolving, name)
+	delete(resolver.resolving, variable.name)
 	if err != nil {
 		return nil, err
 	}
 
-	resolver.resolvedVars[name] = resolved
+	resolver.resolvedVars[variable.name] = resolved
 	return resolved, nil
 }
 
 func (resolver *resolver) resolveRequiredVar(required requiredVarExpr) (expr, *lxError) {
 	value, ok := resolver.cliVars[required.name]
 	if !ok {
-		return nil, &lxError{msg: "missing required variable: " + required.name}
+		return nil, &lxError{
+			msg: fmt.Sprintf("missing required variable: %s\nHint: add --%s=... to your command", required.name, required.name),
+			pos: required.pos,
+		}
 	}
 
-	return literalValueExpr{value: value}, nil
+	return literalValueExpr{pos: required.pos, value: value}, nil
+}
+
+func isResolvedEmptyExpr(expression expr) bool {
+	if expression == nil {
+		return true
+	}
+
+	switch current := expression.(type) {
+	case literalValueExpr:
+		return current.value == ""
+	case groupExpr:
+		if len(current.branches) != 1 {
+			return false
+		}
+		for _, branchExpr := range current.branches[0] {
+			if !isResolvedEmptyExpr(branchExpr) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func appendNormalizedResolvedExpr(expressions []expr, expression expr) []expr {
+	if isResolvedEmptyExpr(expression) {
+		return expressions
+	}
+
+	return append(expressions, expression)
+}
+
+func unwrapRedundantResolvedGroup(group groupExpr) expr {
+	if len(group.branches) != 1 || len(group.branches[0]) != 1 {
+		return group
+	}
+
+	nestedGroup, ok := group.branches[0][0].(groupExpr)
+	if !ok {
+		return group
+	}
+
+	return nestedGroup
 }

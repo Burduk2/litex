@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"fmt"
+	"main/engine/builtin"
 	"slices"
 )
 
@@ -8,92 +10,124 @@ type program struct {
 	expressions []expr
 }
 
-type expr interface{ exprNode() }
+type expr interface {
+	exprNode()
+	exprPos() position
+}
 
 type identExpr struct {
+	pos  position
 	name string
 }
 
-func (identExpr) exprNode() {}
+func (identExpr) exprNode()              {}
+func (expr identExpr) exprPos() position { return expr.pos }
 
 type variableExpr struct {
+	pos  position
 	name string
 }
 
-func (variableExpr) exprNode() {}
+func (variableExpr) exprNode()              {}
+func (expr variableExpr) exprPos() position { return expr.pos }
 
 type requiredVarExpr struct {
+	pos  position
 	name string
 }
 
-func (requiredVarExpr) exprNode() {}
+func (requiredVarExpr) exprNode()              {}
+func (expr requiredVarExpr) exprPos() position { return expr.pos }
 
 type notExpr struct {
+	pos    position
 	target expr
 }
 
-func (notExpr) exprNode() {}
+func (notExpr) exprNode()              {}
+func (expr notExpr) exprPos() position { return expr.pos }
 
 type builtinExpr struct {
+	pos  position
 	name string
 }
 
-func (builtinExpr) exprNode() {}
+func (builtinExpr) exprNode()              {}
+func (expr builtinExpr) exprPos() position { return expr.pos }
 
 type literalValueExpr struct {
+	pos   position
 	value string
 }
 
-func (literalValueExpr) exprNode() {}
+func (literalValueExpr) exprNode()              {}
+func (expr literalValueExpr) exprPos() position { return expr.pos }
 
 type classExpr struct {
+	pos   position
 	items []expr
 }
 
-func (classExpr) exprNode() {}
+func (classExpr) exprNode()              {}
+func (expr classExpr) exprPos() position { return expr.pos }
 
 type groupExpr struct {
+	pos      position
 	branches [][]expr
 }
 
-func (groupExpr) exprNode() {}
+func (groupExpr) exprNode()              {}
+func (expr groupExpr) exprPos() position { return expr.pos }
 
 type captureExpr struct {
+	pos   position
 	name  string
 	group groupExpr
 }
 
-func (captureExpr) exprNode() {}
+func (captureExpr) exprNode()              {}
+func (expr captureExpr) exprPos() position { return expr.pos }
 
 type quantifierExpr struct {
+	pos    position
 	target expr
 	min    int
 	max    *int
 }
 
-func (quantifierExpr) exprNode() {}
+func (quantifierExpr) exprNode()              {}
+func (expr quantifierExpr) exprPos() position { return expr.pos }
 
 type defineExpr struct {
+	pos   position
 	name  string
 	value expr
 }
 
-func (defineExpr) exprNode() {}
+func (defineExpr) exprNode()              {}
+func (expr defineExpr) exprPos() position { return expr.pos }
 
-type patternSectionExpr struct{}
+type patternSectionExpr struct {
+	pos position
+}
 
-func (patternSectionExpr) exprNode() {}
+func (patternSectionExpr) exprNode()              {}
+func (expr patternSectionExpr) exprPos() position { return expr.pos }
 
 type classChar struct {
+	pos   position
 	value rune
 }
 type classRange struct {
+	pos  position
 	from rune
 	to   rune
 }
 
-func (classChar) exprNode()  {}
-func (classRange) exprNode() {}
+func (classChar) exprNode()               {}
+func (classRange) exprNode()              {}
+func (expr classChar) exprPos() position  { return expr.pos }
+func (expr classRange) exprPos() position { return expr.pos }
 
 type parser struct {
 	tokens             []token
@@ -192,7 +226,7 @@ func (parser *parser) parsePrimary() (expr, *lxError) {
 	switch currentToken.typ {
 	case identToken:
 		parser.advance()
-		return identExpr{name: currentToken.val}, nil
+		return identExpr{pos: currentToken.pos, name: currentToken.val}, nil
 	case notToken:
 		return parser.parseNotExpr()
 	case captureToken:
@@ -201,20 +235,20 @@ func (parser *parser) parsePrimary() (expr, *lxError) {
 		return parser.parseRequireExpr()
 	case variableToken:
 		parser.advance()
-		return variableExpr{name: currentToken.val}, nil
+		return variableExpr{pos: currentToken.pos, name: currentToken.val}, nil
 	case builtinToken:
 		parser.advance()
-		return builtinExpr{name: currentToken.val}, nil
+		return builtinExpr{pos: currentToken.pos, name: currentToken.val}, nil
 	case literalToken:
 		parser.advance()
-		return literalValueExpr{value: currentToken.val}, nil
+		return literalValueExpr{pos: currentToken.pos, value: currentToken.val}, nil
 	case classToken:
 		parser.advance()
 		items, err := parseClassItems(currentToken)
 		if err != nil {
 			return nil, err
 		}
-		return classExpr{items: items}, nil
+		return classExpr{pos: currentToken.pos, items: items}, nil
 	case lparenToken:
 		return parser.parseGroup()
 	case pipeToken:
@@ -222,12 +256,12 @@ func (parser *parser) parsePrimary() (expr, *lxError) {
 			msg: "unexpected alternative separator",
 			pos: currentToken.pos,
 		}
-	case starToken, plusToken, qmarkToken, numberToken:
+	case numberToken:
 		return nil, &lxError{
 			msg: "quantifiers cannot be quantified",
 			pos: currentToken.pos,
 		}
-	case dashToken:
+	case rangeSepToken:
 		return nil, &lxError{
 			msg: "invalid quantifier",
 			pos: currentToken.pos,
@@ -263,8 +297,9 @@ func (parser *parser) parseDefinition() (expr, *lxError) {
 	}
 
 	return defineExpr{
+		pos:   nameToken.pos,
 		name:  nameToken.val,
-		value: groupExpr{branches: [][]expr{expressions}},
+		value: groupExpr{pos: nameToken.pos, branches: [][]expr{expressions}},
 	}, nil
 }
 
@@ -292,7 +327,7 @@ func (parser *parser) parsePatternSection() (expr, *lxError) {
 	}
 
 	parser.seenPatternSection = true
-	return patternSectionExpr{}, nil
+	return patternSectionExpr{pos: patternToken.pos}, nil
 }
 
 func (parser *parser) parseDefinitionValue() ([]expr, *lxError) {
@@ -319,7 +354,8 @@ func (parser *parser) parseDefinitionValue() ([]expr, *lxError) {
 }
 
 func (parser *parser) parseGroup() (expr, *lxError) {
-	if _, err := parser.expect(lparenToken); err != nil {
+	startToken, err := parser.expect(lparenToken)
+	if err != nil {
 		return nil, err
 	}
 
@@ -332,6 +368,7 @@ func (parser *parser) parseGroup() (expr, *lxError) {
 		return nil, err
 	}
 
+	group.pos = startToken.pos
 	return group, nil
 }
 
@@ -345,13 +382,25 @@ func (parser *parser) parseCapture() (expr, *lxError) {
 	if err != nil {
 		return nil, err
 	}
+	if _, exists := builtin.GroupNames[nameToken.val]; exists {
+		return nil, &lxError{
+			msg: fmt.Sprintf("capture group name '%s' is reserved by a builtin, use a different name", nameToken.val),
+			pos: nameToken.pos,
+		}
+	}
 
 	group, err := parser.parseRequiredGroup("capture")
 	if err != nil {
 		return nil, err
 	}
+	if isEmptyLiteralGroup(group) {
+		return nil, &lxError{
+			msg: "capture group cannot be an empty string literal",
+			pos: group.pos,
+		}
+	}
 
-	return captureExpr{name: nameToken.val, group: group}, nil
+	return captureExpr{pos: nameToken.pos, name: nameToken.val, group: group}, nil
 }
 
 func (parser *parser) parseRequireExpr() (expr, *lxError) {
@@ -368,7 +417,7 @@ func (parser *parser) parseRequireExpr() (expr, *lxError) {
 		}
 	}
 
-	return requiredVarExpr{name: nameToken.val}, nil
+	return requiredVarExpr{pos: nameToken.pos, name: nameToken.val}, nil
 }
 
 func (parser *parser) parseNotExpr() (expr, *lxError) {
@@ -380,14 +429,26 @@ func (parser *parser) parseNotExpr() (expr, *lxError) {
 	switch parser.peek().typ {
 	case identToken:
 		targetToken := parser.advance()
-		return notExpr{target: identExpr{name: targetToken.val}}, nil
+		if _, exists := runeIdents[targetToken.val]; !exists {
+			return nil, &lxError{
+				msg: "invalid identifier in not expression: " + targetToken.val,
+				pos: targetToken.pos,
+			}
+		}
+		return notExpr{
+			pos:    notTok.pos,
+			target: identExpr{pos: targetToken.pos, name: targetToken.val},
+		}, nil
 	case classToken:
 		targetToken := parser.advance()
 		items, err := parseClassItems(targetToken)
 		if err != nil {
 			return nil, err
 		}
-		return notExpr{target: classExpr{items: items}}, nil
+		return notExpr{
+			pos:    notTok.pos,
+			target: classExpr{pos: targetToken.pos, items: items},
+		}, nil
 	default:
 		return nil, &lxError{
 			msg: "'not' expects an identifier or character class",
@@ -515,7 +576,7 @@ func (parser *parser) parseQuantifier(target expr) (expr, *lxError) {
 	currentToken := parser.peek()
 
 	if _, alreadyQuantified := target.(quantifierExpr); alreadyQuantified {
-		if tokenIn(currentToken.typ, starToken, plusToken, qmarkToken, numberToken) {
+		if tokenIn(currentToken.typ, numberToken) {
 			return nil, &lxError{
 				msg: "quantifiers cannot be quantified",
 				pos: currentToken.pos,
@@ -525,7 +586,7 @@ func (parser *parser) parseQuantifier(target expr) (expr, *lxError) {
 	}
 
 	if !isQuantifiable(target) {
-		if tokenIn(currentToken.typ, starToken, plusToken, qmarkToken, numberToken) {
+		if tokenIn(currentToken.typ, numberToken) {
 			return nil, &lxError{
 				msg: "expression cannot be quantified",
 				pos: currentToken.pos,
@@ -533,18 +594,14 @@ func (parser *parser) parseQuantifier(target expr) (expr, *lxError) {
 		}
 		return target, nil
 	}
+	if isEmptyQuantifierTarget(target) && currentToken.typ == numberToken {
+		return nil, &lxError{
+			msg: "empty string literals cannot be quantified",
+			pos: target.exprPos(),
+		}
+	}
 
 	switch currentToken.typ {
-	case starToken:
-		parser.advance()
-		return quantifierExpr{target: target, min: 0, max: nil}, nil
-	case plusToken:
-		parser.advance()
-		return quantifierExpr{target: target, min: 1, max: nil}, nil
-	case qmarkToken:
-		parser.advance()
-		max := 1
-		return quantifierExpr{target: target, min: 0, max: &max}, nil
 	case numberToken:
 		return parser.parseNumericQuantifier(target)
 	default:
@@ -563,13 +620,19 @@ func (parser *parser) parseNumericQuantifier(target expr) (expr, *lxError) {
 		return nil, convErr
 	}
 
-	if !parser.match(dashToken) {
+	if !parser.match(rangeSepToken) {
+		if firstValue == 0 {
+			return nil, &lxError{
+				msg: "invalid quantifier: use 0.. or 0..x instead of 0",
+				pos: firstToken.pos,
+			}
+		}
 		max := firstValue
-		return quantifierExpr{target: target, min: firstValue, max: &max}, nil
+		return quantifierExpr{pos: target.exprPos(), target: target, min: firstValue, max: &max}, nil
 	}
 
-	if tokenIn(parser.peek().typ, eofToken, rparenToken, pipeToken) || parser.startsDefinition() {
-		return quantifierExpr{target: target, min: firstValue, max: nil}, nil
+	if parser.peek().typ != numberToken {
+		return quantifierExpr{pos: target.exprPos(), target: target, min: firstValue, max: nil}, nil
 	}
 
 	secondToken, err := parser.expect(numberToken)
@@ -581,6 +644,12 @@ func (parser *parser) parseNumericQuantifier(target expr) (expr, *lxError) {
 	if convErr != nil {
 		return nil, convErr
 	}
+	if secondValue == firstValue {
+		return nil, &lxError{
+			msg: fmt.Sprintf("redundant quantifier range: use %d instead of %d..%d", firstValue, firstValue, secondValue),
+			pos: secondToken.pos,
+		}
+	}
 	if secondValue < firstValue {
 		return nil, &lxError{
 			msg: "invalid quantifier range",
@@ -588,7 +657,7 @@ func (parser *parser) parseNumericQuantifier(target expr) (expr, *lxError) {
 		}
 	}
 
-	return quantifierExpr{target: target, min: firstValue, max: &secondValue}, nil
+	return quantifierExpr{pos: target.exprPos(), target: target, min: firstValue, max: &secondValue}, nil
 }
 
 func (parser *parser) startsDefinition() bool {
@@ -619,6 +688,36 @@ func isQuantifiable(target expr) bool {
 		return false
 	default:
 		return true
+	}
+}
+
+func isEmptyQuantifierTarget(target expr) bool {
+	switch current := target.(type) {
+	case literalValueExpr:
+		return current.value == ""
+	case groupExpr:
+		return isEmptyLiteralGroup(current)
+	default:
+		return false
+	}
+}
+
+func isEmptyLiteralGroup(group groupExpr) bool {
+	if len(group.branches) != 1 || len(group.branches[0]) != 1 {
+		return false
+	}
+
+	return isEmptyStringExpr(group.branches[0][0])
+}
+
+func isEmptyStringExpr(expression expr) bool {
+	switch current := expression.(type) {
+	case literalValueExpr:
+		return current.value == ""
+	case groupExpr:
+		return isEmptyLiteralGroup(current)
+	default:
+		return false
 	}
 }
 
@@ -656,25 +755,30 @@ func parseClassItems(tok token) ([]expr, *lxError) {
 		item := content[start:i]
 		length := len(item)
 
+		itemPos := position{
+			line:   tok.pos.line,
+			column: tok.pos.column + start,
+		}
+
 		if length == 1 {
-			items = append(items, classChar{value: item[0]})
-		} else if length == 3 && item[1] == '-' {
-			from, to := item[0], item[2]
+			items = append(items, classChar{pos: itemPos, value: item[0]})
+		} else if length == 4 && item[1] == '.' && item[2] == '.' {
+			from, to := item[0], item[3]
 			if numberCharRegex.MatchString(string(from)) && numberCharRegex.MatchString(string(to)) {
 				if from >= to {
 					return nil, getClassRangeError(tok, item, start)
 				}
-				items = append(items, classRange{from: from, to: to})
+				items = append(items, classRange{pos: itemPos, from: from, to: to})
 			} else if lowerCharRegex.MatchString(string(from)) && lowerCharRegex.MatchString(string(to)) {
 				if int(from) >= int(to) {
 					return nil, getClassRangeError(tok, item, start)
 				}
-				items = append(items, classRange{from: from, to: to})
+				items = append(items, classRange{pos: itemPos, from: from, to: to})
 			} else if upperCharRegex.MatchString(string(from)) && upperCharRegex.MatchString(string(to)) {
 				if int(from) >= int(to) {
 					return nil, getClassRangeError(tok, item, start)
 				}
-				items = append(items, classRange{from: from, to: to})
+				items = append(items, classRange{pos: itemPos, from: from, to: to})
 			} else {
 				return nil, &lxError{
 					msg: "invalid range in character class: " + string(item),
@@ -686,16 +790,16 @@ func parseClassItems(tok token) ([]expr, *lxError) {
 			}
 		} else {
 			str := string(item)
-			if _, exists := idents[str]; !exists || str == "anychar" {
+			if _, exists := runeIdents[str]; !exists {
 				return nil, &lxError{
-					msg: "invalid ident in character class: " + str,
+					msg: "invalid identifier in character class: " + str,
 					pos: position{
 						line:   tok.pos.line,
 						column: tok.pos.column + start,
 					},
 				}
 			}
-			items = append(items, identExpr{name: str})
+			items = append(items, identExpr{pos: itemPos, name: str})
 		}
 	}
 

@@ -1,0 +1,10 @@
+pattern:
+capture DOMAIN(
+  [letter digit]
+  (
+    [letter digit - .] 0..
+    [letter digit]
+  ) 0..1
+  "."
+  [letter digit] 1..63
+)

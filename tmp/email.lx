@@ -2,8 +2,8 @@ $alwaysValid = [letter digit _ % +]
 
 pattern:
 
-capture EMAIL(
-  capture EMAIL_LOCALPART(
+capture Email(
+  capture Email__localPart(
     (
       $alwaysValid
       (
@@ -13,5 +13,5 @@ capture EMAIL(
     ) 1..64
   ) 
   "@"
-  capture EMAIL_DOMAIN(@domain_unwrapped)
+  capture Email__domain(@domain)
 )

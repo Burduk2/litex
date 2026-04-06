@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"main/engine/builtin"
 	"regexp"
 )
 
@@ -22,11 +23,8 @@ const (
 	lbracketToken
 	rbracketToken
 
-	starToken
-	plusToken
-	qmarkToken
 	pipeToken
-	dashToken
+	rangeSepToken
 	equalsToken
 	colonToken
 
@@ -122,7 +120,7 @@ func (l *lexer) lex() ([]token, *lxError) {
 			}
 
 			val := string(l.input[start.offset:l.pos])
-			if !numberRegex.MatchString(val) {
+			if !numberRegex.MatchString(val) && !(len(val) == 1 && val[0] == '0') {
 				err := &lxError{
 					msg: "invalid number: " + val,
 					pos: start,
@@ -147,6 +145,7 @@ func (l *lexer) lex() ([]token, *lxError) {
 			}
 
 			val := string(l.input[start.offset:l.pos])
+
 			if !identRegex.MatchString(val) {
 				err := &lxError{
 					msg: "invalid identifier: " + val,
@@ -155,19 +154,22 @@ func (l *lexer) lex() ([]token, *lxError) {
 				return tokens, err
 			}
 
+			tokType := identToken
+			switch val {
+			case "not":
+				tokType = notToken
+			case "capture":
+				tokType = captureToken
+			case "require":
+				tokType = requireToken
+			}
+
 			tokens = append(tokens, token{
-				typ: identToken,
+				typ: tokType,
 				val: val,
 				pos: start,
 			})
-			switch val {
-			case "not":
-				tokens[len(tokens)-1].typ = notToken
-			case "capture":
-				tokens[len(tokens)-1].typ = captureToken
-			case "require":
-				tokens[len(tokens)-1].typ = requireToken
-			}
+
 			continue
 		}
 
@@ -208,7 +210,7 @@ func (l *lexer) lex() ([]token, *lxError) {
 
 			val := string(l.input[start.offset:l.pos])
 
-			if _, ok := builtins[val]; !ok {
+			if _, ok := builtin.Builtins[val]; !ok {
 				err := &lxError{
 					msg: "unknown builtin: " + val,
 					pos: start,
@@ -257,8 +259,6 @@ func (l *lexer) lex() ([]token, *lxError) {
 						val = append(val, '\\')
 					case 'n':
 						val = append(val, '\n')
-					case 't':
-						val = append(val, '\t')
 					case 'r':
 						val = append(val, '\r')
 					default:
@@ -342,7 +342,7 @@ func (l *lexer) lex() ([]token, *lxError) {
 			continue
 		}
 
-		// single char tokens
+		// punctuation tokens
 		start := l.makePos()
 
 		switch ch {
@@ -354,16 +354,18 @@ func (l *lexer) lex() ([]token, *lxError) {
 			tokens = append(tokens, token{typ: lbracketToken, pos: start})
 		case ']':
 			tokens = append(tokens, token{typ: rbracketToken, pos: start})
-		case '*':
-			tokens = append(tokens, token{typ: starToken, pos: start})
-		case '+':
-			tokens = append(tokens, token{typ: plusToken, pos: start})
-		case '?':
-			tokens = append(tokens, token{typ: qmarkToken, pos: start})
 		case '|':
 			tokens = append(tokens, token{typ: pipeToken, pos: start})
-		case '-':
-			tokens = append(tokens, token{typ: dashToken, pos: start})
+		case '.':
+			if l.pos+1 >= len(l.input) || l.input[l.pos+1] != '.' {
+				err := &lxError{
+					msg: "unexpected character: " + string(ch),
+					pos: l.makePos(),
+				}
+				return tokens, err
+			}
+			tokens = append(tokens, token{typ: rangeSepToken, pos: start})
+			l.advance()
 		case '=':
 			tokens = append(tokens, token{typ: equalsToken, pos: start})
 		case ':':

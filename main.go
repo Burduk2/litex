@@ -8,7 +8,7 @@ import (
 )
 
 func LxError(text string) {
-	fmt.Println("lirex: " + text)
+	fmt.Println("litex: " + text)
 	os.Exit(1)
 }
 
@@ -19,7 +19,7 @@ func isCliFilePath(str string) bool {
 	return str[0] == '@'
 }
 
-func handleFindTestArgs(cmd, pattern, content string) (string, string) {
+func handlePatternContentArgs(cmd, pattern, content string) (string, string) {
 	if pattern == "" {
 		LxError(cmd + ": no pattern provided")
 	}
@@ -43,6 +43,7 @@ func handleFindTestArgs(cmd, pattern, content string) (string, string) {
 
 func printHelp() {
 	fmt.Print(`usage:
+	lx compile <pattern> [--name=value ...]
   lx find <pattern> <content> [--name=value ...]
   lx findall <pattern> <content> [--name=value ...]
   lx test <pattern> <content> [--name=value ...]
@@ -95,32 +96,65 @@ func main() {
 		LxError("no command provided\n'lx help' for help")
 	}
 
-	pattern, content, replacement := "", "", ""
-	vars := make(map[string]string)
+	options := engine.RunnerOptions{}
 
 	cmd := os.Args[1]
 	switch cmd {
 	case "help":
 		printHelp()
 		return
+	case "compile":
+		if numArgs < 3 {
+			LxError(fmt.Sprintf("not enough arguments for %s", cmd))
+		}
+		pattern, _ := handlePatternContentArgs(cmd, os.Args[2], "")
+
+		options.Mode = engine.CompileMode
+		options.Pattern = pattern
+		options.Vars = parseCliVars(os.Args[3:])
 	case "find", "findall", "test":
 		if numArgs < 4 {
 			LxError(fmt.Sprintf("not enough arguments for %s", cmd))
 		}
-		pattern, content = handleFindTestArgs(cmd, os.Args[2], os.Args[3])
-		vars = parseCliVars(os.Args[4:])
+		pattern, content := handlePatternContentArgs(cmd, os.Args[2], os.Args[3])
+
+		var mode engine.RunnerMode
+		switch cmd {
+		case "find":
+			mode = engine.FindMode
+		case "findall":
+			mode = engine.FindAllMode
+		case "test":
+			mode = engine.TestMode
+		}
+
+		options.Mode = mode
+		options.Pattern = pattern
+		options.Content = content
+		options.Vars = parseCliVars(os.Args[4:])
 	case "replace", "replaceall":
 		if numArgs < 5 {
 			LxError(fmt.Sprintf("not enough arguments for %s", cmd))
 		}
-		pattern = os.Args[2]
-		replacement = os.Args[3]
-		content = os.Args[4]
-		vars = parseCliVars(os.Args[5:])
+		pattern, content := handlePatternContentArgs(cmd, os.Args[2], os.Args[4])
+
+		var mode engine.RunnerMode
+		switch cmd {
+		case "replace":
+			mode = engine.ReplaceMode
+		case "replaceall":
+			mode = engine.ReplaceAllMode
+		}
+
+		options.Mode = mode
+		options.Pattern = pattern
+		options.Content = content
+		options.Replacement = os.Args[3]
+		options.Vars = parseCliVars(os.Args[5:])
 	default:
 		LxError(fmt.Sprintf("unknown command: %s\n'lx help' for help", cmd))
 	}
 
-	result := engine.Run(cmd, pattern, content, replacement, vars)
+	result := engine.Run(options)
 	fmt.Println(result)
 }

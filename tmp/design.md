@@ -6,44 +6,36 @@
 - comments start with #
 - custom strings inside of ""
 - built in helpers (whitespace, anyChar, etc) without quotes
-- can add quantifiers to elements (x+, x-y, ?)
+- can add quantifiers to elements with numeric ranges only
 - built in patterns start with @
 
 ## Quantifiers
-0 or more
-    a*
 1 or more
-    a+
-0 or 1
-    a?
+    a 1..
 x or more
     a x.. 
-    a x-
-    a{x,}
 between x and y
-    a{x,y}
-    a x-y
     a x..y
 
 ```
 require customVar             # --customVar must be provided by user (a literal string)
-$id = letter digit 0+
-$id = letter digit* 
+$id = letter digit 1..
+$id = letter digit 2..4
 
 pattern:
 $customVar
 "<%"
-whitespace 0+
+whitespace 1..
 
-"a" 1-5  # {1,5}
+"a" 1..5
 "b" 3    # {3}
-"c" 4-   # {4,}
-"d"*     # *
-"e"?     # ?
-"f"+     # +
+"c" 4..
+"d" 1..
+"e" 1
+"f" 1..
 
 $id
-capture whateverName { anyChar 0+ }
+capture whateverName { anyChar 1.. }
 
 or (
      ( "a" whitespace ) 
@@ -54,9 +46,9 @@ or (
 (
     @email
     "a"
-) 1-2
+) 1..2
 
-whitespace 0+
+whitespace 1..
 @email                           # built in
 ['$#@' digit newline]              # enforcing '' instead of "" to show that it matches chars individually (as runes) 
 "%>"
@@ -76,8 +68,6 @@ lx
     test
         <pattern> <content> [--name=value ...]
     replace <pattern> "replacement" <content> [--name=value ...]
-
-
 
 
 
