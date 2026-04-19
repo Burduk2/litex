@@ -1,5 +1,5 @@
 pattern:
-capture DOMAIN(
+DOMAIN {
   [letter digit]
   (
     [letter digit - .] 0..
@@ -7,4 +7,4 @@ capture DOMAIN(
   ) 0..1
   "."
   [letter digit] 1..63
-)
+}

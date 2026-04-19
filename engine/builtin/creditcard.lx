@@ -1,8 +1,8 @@
 pattern:
 
-capture CREDITCARD(
+CREDITCARD {
   (
     digit 4
     ( whitespace | "-" ) 0..1
   ) 4
-) 
+}

@@ -12,7 +12,7 @@ letter 1
 # ("") 1 #test
 # (((("")))) 1 #test
 # "" 1 #test
-# capture axxx ("") #test
+# axxx { "" } #test
 # digit 0.. #test
 # digit 1.. #test
 # $empty #test
@@ -21,8 +21,8 @@ letter 1
 "" #test | should be removed by resolver
 ((("")))
 $empty
-# capture testEmpty ( $empty )
-# capture testEmpty ( ( ("") ) ) #test
+# testEmpty { $empty }
+# testEmpty { ( ("") ) } #test
 
 $sdf
 $id
@@ -30,13 +30,13 @@ $isd
 $c
 $name
 
-capture name (
+name {
   digit 1..5 
   letter 3..4
   $id
-) 
+}
 
-capture smth ($a)
+smth { $a }
 
 ( whitespace 1..5 | whitespace 3.. | "" ) 
 

@@ -1,0 +1,29 @@
+{
+  "name": "tree-sitter-lx",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for the lx pattern language",
+  "main": "bindings/node",
+  "keywords": [
+    "parser",
+    "tree-sitter",
+    "lx"
+  ],
+  "files": [
+    "grammar.js",
+    "tree-sitter.json",
+    "queries/*",
+    "src/*",
+    "bindings/node/*"
+  ],
+  "tree-sitter": [
+    {
+      "scope": "source.lx",
+      "file-types": [
+        "lx"
+      ]
+    }
+  ],
+  "devDependencies": {
+    "tree-sitter-cli": "^0.26.7"
+  }
+}

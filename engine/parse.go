@@ -225,12 +225,13 @@ func (parser *parser) parsePrimary() (expr, *lxError) {
 
 	switch currentToken.typ {
 	case identToken:
+		if parser.lookahead(1).typ == lbraceToken {
+			return parser.parseCapture()
+		}
 		parser.advance()
 		return identExpr{pos: currentToken.pos, name: currentToken.val}, nil
 	case notToken:
 		return parser.parseNotExpr()
-	case captureToken:
-		return parser.parseCapture()
 	case requireToken:
 		return parser.parseRequireExpr()
 	case variableToken:
@@ -359,7 +360,7 @@ func (parser *parser) parseGroup() (expr, *lxError) {
 		return nil, err
 	}
 
-	group, err := parser.parseGroupBody()
+	group, err := parser.parseGroupBody(rparenToken)
 	if err != nil {
 		return nil, err
 	}
@@ -373,11 +374,6 @@ func (parser *parser) parseGroup() (expr, *lxError) {
 }
 
 func (parser *parser) parseCapture() (expr, *lxError) {
-	_, err := parser.expect(captureToken)
-	if err != nil {
-		return nil, err
-	}
-
 	nameToken, err := parser.expect(identToken)
 	if err != nil {
 		return nil, err
@@ -389,7 +385,7 @@ func (parser *parser) parseCapture() (expr, *lxError) {
 		}
 	}
 
-	group, err := parser.parseRequiredGroup("capture")
+	group, err := parser.parseRequiredCaptureGroup()
 	if err != nil {
 		return nil, err
 	}
@@ -457,36 +453,34 @@ func (parser *parser) parseNotExpr() (expr, *lxError) {
 	}
 }
 
-func (parser *parser) parseRequiredGroup(context string) (groupExpr, *lxError) {
-	if parser.peek().typ != lparenToken {
+func (parser *parser) parseRequiredCaptureGroup() (groupExpr, *lxError) {
+	startToken, err := parser.expect(lbraceToken)
+	if err != nil {
 		return groupExpr{}, &lxError{
-			msg: context + " expects a () group",
+			msg: "capture expects a {} body",
 			pos: parser.peek().pos,
 		}
 	}
 
-	group, err := parser.parseGroup()
+	group, err := parser.parseGroupBody(rbraceToken)
 	if err != nil {
 		return groupExpr{}, err
 	}
 
-	parsedGroup, ok := group.(groupExpr)
-	if !ok {
-		return groupExpr{}, &lxError{
-			msg: context + " expects a () group",
-			pos: parser.peek().pos,
-		}
+	if _, err := parser.expect(rbraceToken); err != nil {
+		return groupExpr{}, err
 	}
 
-	return parsedGroup, nil
+	group.pos = startToken.pos
+	return group, nil
 }
 
-func (parser *parser) parseGroupBody() (groupExpr, *lxError) {
+func (parser *parser) parseGroupBody(endToken tokenType) (groupExpr, *lxError) {
 	var branches [][]expr
 	leadingPipe := parser.match(pipeToken)
 
 	for {
-		if parser.peek().typ == rparenToken {
+		if parser.peek().typ == endToken {
 			if len(branches) == 0 {
 				return groupExpr{}, &lxError{
 					msg: "empty group is not allowed",
@@ -502,7 +496,7 @@ func (parser *parser) parseGroupBody() (groupExpr, *lxError) {
 			return groupExpr{branches: branches}, nil
 		}
 
-		branch, err := parser.parseBranch(pipeToken, rparenToken)
+		branch, err := parser.parseBranch(pipeToken, endToken)
 		if err != nil {
 			return groupExpr{}, err
 		}

@@ -1,12 +1,12 @@
 pattern:
 
-capture PHONE(
+PHONE {
   "+"
-  capture PHONE_COUNTRYCODE( digit 1..3 )
+  PHONE_COUNTRYCODE { digit 1..3 }
   whitespace 0..1
-  capture PHONE_AREACODE(
+  PHONE_AREACODE {
     (digit 3 | "(" digit 3 ")")
-  )
+  }
   [digit space . -] 0..13
   digit
-)
+}

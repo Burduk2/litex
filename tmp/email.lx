@@ -2,8 +2,8 @@ $alwaysValid = [letter digit _ % +]
 
 pattern:
 
-capture Email(
-  capture Email__localPart(
+Email {
+  Email__localPart {
     (
       $alwaysValid
       (
@@ -11,7 +11,7 @@ capture Email(
         $alwaysValid
       ) 0..1
     ) 1..64
-  ) 
+  }
   "@"
-  capture Email__domain(@domain)
-)
+  Email__domain { @domain }
+}

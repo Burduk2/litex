@@ -21,7 +21,7 @@ func printError(src string, err lxError) {
 
 	line := lines[err.pos.line-1]
 	lineNum := fmt.Sprintf("%d", err.pos.line)
-	fmt.Printf("Litex Compile Error: %s\n", err.msg)
+	fmt.Printf("LitexCompileError: %s\n", err.msg)
 	fmt.Printf(" %s | %s\n", lineNum, line)
 
 	// caret line
@@ -118,8 +118,6 @@ func (t tokenType) String() string {
 		return "ident"
 	case notToken:
 		return "not"
-	case captureToken:
-		return "capture"
 	case requireToken:
 		return "require"
 	case variableToken:
@@ -136,6 +134,10 @@ func (t tokenType) String() string {
 		return "lparen"
 	case rparenToken:
 		return "rparen"
+	case lbraceToken:
+		return "lbrace"
+	case rbraceToken:
+		return "rbrace"
 	case lbracketToken:
 		return "lbracket"
 	case rbracketToken:

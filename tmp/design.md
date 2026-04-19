@@ -59,8 +59,8 @@ whitespace 1..
 
 ## As a cli tool
 
-pattern = {@file.lx | "inline"}
-content = {"inline" | @file}
+pattern = {-f file.lx | "inline"}
+content = "inline"
 
 lx 
     find
@@ -68,7 +68,6 @@ lx
     test
         <pattern> <content> [--name=value ...]
     replace <pattern> "replacement" <content> [--name=value ...]
-
 
 
 

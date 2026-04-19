@@ -1,0 +1,88 @@
+==================
+Definitions And Pattern
+==================
+
+$alwaysValid = [letter digit _ % +]
+
+pattern:
+
+EMAIL {
+  EMAIL_LOCALPART {
+    (
+      $alwaysValid
+      (
+        [letter digit _ % + - .] 0..
+        $alwaysValid
+      ) 0..1
+    ) 1..64
+  }
+  "@"
+  EMAIL_DOMAIN { @domain_unwrapped }
+}
+
+---
+
+(source_file
+  (definition
+    (variable)
+    (character_class))
+  (pattern_section)
+  (expression
+    (capture
+      (identifier)
+      (capture_body
+        (branch
+          (expression
+            (capture
+              (identifier)
+              (capture_body
+                (branch
+                  (expression
+                    (quantified_expression
+                      (group
+                        (branch
+                          (expression
+                            (variable))
+                          (expression
+                            (quantified_expression
+                              (group
+                                (branch
+                                  (expression
+                                    (quantified_expression
+                                      (character_class)
+                                      (quantifier
+                                        (number))))
+                                  (expression
+                                    (variable))))
+                              (quantifier
+                                (number)
+                                (number))))))
+                      (quantifier
+                        (number)
+                        (number))))))))
+          (expression
+            (string))
+          (expression
+            (capture
+              (identifier)
+              (capture_body
+                (branch
+                  (expression
+                    (builtin)))))))))))
+
+==================
+Top Level Inline Style
+==================
+
+EMAIL { "a" }
+
+---
+
+(source_file
+  (expression
+    (capture
+      (identifier)
+      (capture_body
+        (branch
+          (expression
+            (string)))))))

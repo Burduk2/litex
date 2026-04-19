@@ -1,0 +1,27 @@
+{
+  "grammars": [
+    {
+      "name": "lx",
+      "camelcase": "Lx",
+      "scope": "source.lx",
+      "path": ".",
+      "file-types": [
+        "lx"
+      ],
+      "highlights": "queries/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Tree-sitter grammar for the lx pattern language",
+    "authors": [
+      {
+        "name": "Codex"
+      }
+    ],
+    "links": {
+      "repository": "https://example.com/tree-sitter-lx"
+    }
+  }
+}

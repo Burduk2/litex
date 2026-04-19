@@ -10,7 +10,6 @@ type tokenType int
 const (
 	identToken tokenType = iota
 	notToken
-	captureToken
 	requireToken
 	variableToken
 	builtinToken
@@ -20,6 +19,8 @@ const (
 
 	lparenToken
 	rparenToken
+	lbraceToken
+	rbraceToken
 	lbracketToken
 	rbracketToken
 
@@ -158,8 +159,6 @@ func (l *lexer) lex() ([]token, *lxError) {
 			switch val {
 			case "not":
 				tokType = notToken
-			case "capture":
-				tokType = captureToken
 			case "require":
 				tokType = requireToken
 			}
@@ -350,6 +349,10 @@ func (l *lexer) lex() ([]token, *lxError) {
 			tokens = append(tokens, token{typ: lparenToken, pos: start})
 		case ')':
 			tokens = append(tokens, token{typ: rparenToken, pos: start})
+		case '{':
+			tokens = append(tokens, token{typ: lbraceToken, pos: start})
+		case '}':
+			tokens = append(tokens, token{typ: rbraceToken, pos: start})
 		case '[':
 			tokens = append(tokens, token{typ: lbracketToken, pos: start})
 		case ']':
