@@ -17,7 +17,7 @@ It is built for cases where raw regex is too dense to write or review directly, 
 - [`main.go`](./main.go): CLI entry point.
 - [`engine`](./engine): lexer, parser, resolver, compiler, and builtins.
 - [`tree-sitter-lx`](./tree-sitter-lx): Tree-sitter grammar for `.lx` files.
-- [`tmp`](./tmp): example and scratch `.lx` files used during development.
+- [`engine/builtin`](./engine/builtin): built-in `.lx` patterns and the compiled regex registry.
 
 ## Install
 
@@ -78,7 +78,7 @@ go run . findall '@email' 'a@b.com x y@test.dev'
 Compile a file-backed pattern:
 
 ```sh
-go run . compile -f tmp/email.lx
+go run . compile -f engine/builtin/email.lx
 ```
 
 Use a required CLI variable from a file-backed pattern:
@@ -224,34 +224,40 @@ pattern:
 @email
 ```
 
-## Example: Email Pattern
+## Example: Builtin Email Pattern
 
-[`tmp/email.lx`](./tmp/email.lx) shows a non-trivial pattern with variables and nested captures:
+[`engine/builtin/email.lx`](./engine/builtin/email.lx) shows a non-trivial pattern with variables and nested captures:
 
 ```lx
 $alwaysValid = [letter digit _ % +]
 
 pattern:
 
-Email {
-  Email__localPart {
+email {
+  email_localpart { (
+    $alwaysValid 
     (
+      [letter digit _ % + - .] 0..
       $alwaysValid
-      (
-        [letter digit _ % + - .] 0..
-        $alwaysValid
-      ) 0..1
-    ) 1..64
-  }
+    ) 0..1
+  ) 1..64 }
   "@"
-  Email__domain { @domain }
+  email_domain {
+    [letter digit]
+    (
+        [letter digit - .] 0..
+        [letter digit]
+    ) 0..1
+    "."
+    [letter digit] 1..63
+  }
 }
 ```
 
 Compiling it:
 
 ```sh
-go run . compile -f tmp/email.lx
+go run . compile -f engine/builtin/email.lx
 ```
 
 ## Current Constraints
@@ -262,6 +268,35 @@ go run . compile -f tmp/email.lx
 - Builtins cannot be used more than once in a single pattern.
 - Capture names must be unique.
 - Anchors like `linestart` and `lineend` cannot be quantified.
+
+## Error Examples
+
+Errors include a message, source line, and caret position.
+
+Missing a required CLI variable:
+
+```text
+LitexCompileError: missing required variable: value
+Hint: add --value=... to your command
+ 1 | $value = require value
+   |                  ^
+```
+
+Using `not` with an unsupported target:
+
+```text
+LitexCompileError: 'not' expects an identifier or character class
+ 1 | pattern: not "x"
+   |          ^
+```
+
+Reusing a capture name:
+
+```text
+LitexCompileError: duplicate capture name: User
+ 3 | User { letter }
+   | ^
+```
 
 ## Tree-sitter
 
